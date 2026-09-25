@@ -7,11 +7,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+
+      - run: flutter create . --platforms=android --force
       - run: flutter pub get
+      - run: dart run flutter_launcher_icons || true
       - run: flutter build apk --release
+
       - uses: actions/upload-artifact@v3
         with:
           name: release-apk
