@@ -22,18 +22,18 @@ jobs:
           # 1. حفظ كود التحكم الرئيسي
           cp lib/main.dart main.dart.bak
 
-          # 2. تنظيف المستودع من الملفات القديمة
+          # 2. تنظيف البيئة والتأكد من إزالة المجلدات القديمة
           rm -rf android ios pubspec.yaml pubspec.lock .dart_tool
 
-          # 3. إنشاء الهيكل وتحديد اسم الحزمة بـ (receiver_app) لتفادي أخطاء الأسماء
+          # 3. إعادة إنشاء هيكل أندرويد بأسماء حزم مسموحة
           flutter create --project-name receiver_app --platforms=android --org com.receiver.app .
 
-          # 4. إرجاع كود main.dart وإضافة مكتبة archive لـ Zlib
+          # 4. استرجاع الكود المباشر وإضافة مكتبة الضغط Zlib
           cp main.dart.bak lib/main.dart
           flutter pub add archive
 
-          # 5. تعديل minSdkVersion إلى 21 لتوافق شبكات TCP
-          find android -name "build.gradle*" -exec sed -i 's/minSdkVersion.*/minSdkVersion = 21/g' {} + || true
+          # 5. استبدال السطر بالكامل بتركيب Kotlin المعتمد (minSdk = 21)
+          find android -name "build.gradle*" -exec sed -i 's/.*minSdk.*/        minSdk = 21/g' {} + || true
 
       - name: Build Debug APK
         run: flutter build apk --debug
