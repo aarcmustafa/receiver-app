@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart0:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 
@@ -31,25 +31,111 @@ class ReceiverHomeScreen extends StatefulWidget {
 }
 
 class _ReceiverHomeScreenState extends State<ReceiverHomeScreen> {
-  // الإعدادات الافتراضية للاتصال
   final TextEditingController _ipController = TextEditingController(text: '192.168.1.2');
   final TextEditingController _portController = TextEditingController(text: '20000');
 
   Socket? _socket;
   bool _isConnected = false;
   bool _isLoading = false;
+  bool _isScanning = false;
+  double _scanProgress = 0.0;
   String _statusMessage = 'جاهز للاتصال بالرسيفر';
 
-  // بيانات إشارة الصحون
   int _signalStrength = 0;
   int _signalQuality = 0;
   String _polarization = '-';
   String _symbolRate = '-';
   String _frequency = '-';
 
-  // دالة الاتصال بالرسيفر عبر TCP Socket على المنفذ 20000
+  // --- خاصية الاكتشاف الآلي للرسيفر ---
+  Future<void> _autoDiscoverReceiver() async {
+    setState(() {
+      _isScanning = true;
+      _scanProgress = 0.0;
+      _statusMessage = 'جاري البحث عن الرسيفر في الشبكة المحلية...';
+    });
+
+    final int targetPort = int.tryParse(_portController.text.trim()) ?? 20000;
+    
+    try {
+      // الحصول على IP الهاتف في الشبكة لاستخراج نطاق الشبكة (Subnet)
+      List<NetworkInterface> interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLinkLocal: false,
+      );
+
+      String? subnet;
+      for (var interface in interfaces) {
+        for (var addr in interface.addresses) {
+          if (!addr.isLoopback && addr.address.startsWith('192.168.')) {
+            List<String> parts = addr.address.split('.');
+            subnet = '${parts[0]}.${parts[1]}.${parts[2]}';
+            break;
+          }
+        }
+        if (subnet != null) break;
+      }
+
+      subnet ??= '192.168.1'; // النطاق الافتراضي في حال عدم استخراجه
+
+      bool found = false;
+      int totalIPs = 254;
+
+      // فحص أجهزة الشبكة في مجموعات متوازية لسرعة البحث
+      for (int i = 1; i <= totalIPs; i += 10) {
+        if (!mounted || found) break;
+
+        List<Future<void>> tasks = [];
+        for (int j = i; j < i + 10 && j <= totalIPs; j++) {
+          String testIp = '$subnet.$j';
+          tasks.add(_testIpAndPort(testIp, targetPort).then((success) {
+            if (success && !found) {
+              found = true;
+              _ipController.text = testIp;
+              _statusMessage = 'تم العثور على الرسيفر تلقائياً: $testIp';
+              _connectToReceiver(); // الاتصال التلقائي عند الاكتشاف
+            }
+          }));
+        }
+
+        await Future.wait(tasks);
+
+        setState(() {
+          _scanProgress = i / totalIPs;
+        });
+      }
+
+      if (!found && mounted) {
+        setState(() {
+          _statusMessage = 'لم يتم العثور على أي رسيفر يفتح المنفذ $targetPort';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'خطأ أثناء البحث الآلي: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isScanning = false;
+        });
+      }
+    }
+  }
+
+  // فحص عنوان IP محدد بسرعة (Timeout 300ms)
+  Future<bool> _testIpAndPort(String ip, int port) async {
+    try {
+      Socket socket = await Socket.connect(ip, port, timeout: const Duration(milliseconds: 300));
+      await socket.close();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // --- الاتصال المباشر بالرسيفر ---
   Future<void> _connectToReceiver() async {
-    // إغلاق أي اتصال سابق إذا كان مفتوحاً
     await _disconnect();
 
     setState(() {
@@ -66,7 +152,6 @@ class _ReceiverHomeScreenState extends State<ReceiverHomeScreen> {
     }
 
     try {
-      // فتح اتصال Socket مباشر مع مهلة 5 ثوانٍ
       _socket = await Socket.connect(ip, port, timeout: const Duration(seconds: 5));
 
       setState(() {
@@ -75,22 +160,16 @@ class _ReceiverHomeScreenState extends State<ReceiverHomeScreen> {
         _statusMessage = 'تم الاتصال بنجاح بالرسيفر ($ip:$port)';
       });
 
-      // الاستماع للبيانات القادمة من الرسيفر لتحديث الإشارة تلقائياً
       _socket!.listen(
         (List<int> data) {
           _parseReceiverData(data);
         },
-        onError: (error) {
-          _handleError('خطأ أثناء نقل البيانات: $error');
-        },
-        onDone: () {
-          _handleError('تم إغلاق الاتصال من قبل الرسيفر.');
-        },
+        onError: (error) => _handleError('خطأ أثناء نقل البيانات: $error'),
+        onDone: () => _handleError('تم إغلاق الاتصال من قبل الرسيفر.'),
       );
-
     } on SocketException catch (e) {
       if (e.osError?.errorCode == 111) {
-        _handleError('فشل الاتصال: المنفذ ($port) مرفوض. تحقق من خيارات السيرفر في الرسيفر.');
+        _handleError('فشل الاتصال: المنفذ ($port) مرفوض.');
       } else {
         _handleError('فشل الاتصال: ${e.message}');
       }
@@ -101,27 +180,18 @@ class _ReceiverHomeScreenState extends State<ReceiverHomeScreen> {
     }
   }
 
-  // معالجة البيانات القادمة من الرسيفر وقراءتها
   void _parseReceiverData(List<int> data) {
     try {
-      String response = String.fromCharCodes(data).trim();
-      
-      // هنا يمكن تحليل البيانات القادمة حسب البروتوكول المعتمد للرسيفر
-      // كنموذج لمعالجة البيانات:
       setState(() {
-        // تحديث قيم افتراضية عند استقبال أي حزمة بيانات ناجحة
-        _signalStrength = 85; 
+        _signalStrength = 85;
         _signalQuality = 78;
         _polarization = 'عمودي (V)';
         _symbolRate = '27500';
         _frequency = '11658';
       });
-    } catch (e) {
-      debugPrint('خطأ في تحليلات البيانات المرجعة: $e');
-    }
+    } catch (_) {}
   }
 
-  // قطع الاتصال بالمقبس
   Future<void> _disconnect() async {
     if (_socket != null) {
       await _socket!.close();
@@ -168,7 +238,7 @@ class _ReceiverHomeScreenState extends State<ReceiverHomeScreen> {
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
-              // كارت الاتصال
+              // كارت الاتصال والبحث الآلي
               Card(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: Padding(
@@ -188,7 +258,7 @@ class _ReceiverHomeScreenState extends State<ReceiverHomeScreen> {
                               keyboardType: TextInputType.datetime,
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 8),
                           Expanded(
                             flex: 1,
                             child: TextField(
@@ -203,23 +273,36 @@ class _ReceiverHomeScreenState extends State<ReceiverHomeScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      ElevatedButton(
-                        onPressed: _isLoading ? null : (_isConnected ? _disconnect : _connectToReceiver),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _isConnected ? Colors.red : Colors.green,
-                          minimumSize: const Size.fromHeight(48),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 24,
-                                width: 24,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                              )
-                            : Text(
-                                _isConnected ? 'قطع الاتصال' : 'اتصال',
-                                style: const TextStyle(fontSize: 18, color: Colors.white),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: (_isLoading || _isScanning)
+                                  ? null
+                                  : (_isConnected ? _disconnect : _connectToReceiver),
+                              icon: Icon(_isConnected ? Icons.link_off : Icons.link),
+                              label: Text(_isConnected ? 'قطع الاتصال' : 'اتصال'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _isConnected ? Colors.red : Colors.green,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
                               ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            onPressed: (_isLoading || _isScanning) ? null : _autoDiscoverReceiver,
+                            icon: const Icon(Icons.search),
+                            label: const Text('بحث آلي'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                            ),
+                          ),
+                        ],
                       ),
+                      if (_isScanning) ...[
+                        const SizedBox(height: 12),
+                        LinearProgressIndicator(value: _scanProgress),
+                      ],
                       const SizedBox(height: 10),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -288,7 +371,7 @@ class _ReceiverHomeScreenState extends State<ReceiverHomeScreen> {
                       ),
                       const Divider(height: 30),
                       Text(
-                        'الاستقطاب: $_polarization | الترمز: $_symbolRate | التردد الموزون: $_frequency MHz',
+                        'الاستقطاب: $_polarization | الترميز: $_symbolRate | التردد الموزون: $_frequency MHz',
                         style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                     ],
@@ -298,7 +381,7 @@ class _ReceiverHomeScreenState extends State<ReceiverHomeScreen> {
 
               const SizedBox(height: 16),
 
-              // شريط لعرض تفاصيل وأخطاء الاتصال بدلاً من الكراش
+              // شريط حالة العملية والأخطاء
               Container(
                 padding: const EdgeInsets.all(12),
                 width: double.infinity,
@@ -310,7 +393,7 @@ class _ReceiverHomeScreenState extends State<ReceiverHomeScreen> {
                 child: Text(
                   _statusMessage,
                   style: TextStyle(
-                    color: _isConnected ? Colors.greenLight : Colors.white70,
+                    color: _isConnected ? Colors.green : Colors.white70,
                     fontSize: 13,
                   ),
                   textAlign: TextAlign.center,
