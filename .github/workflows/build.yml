@@ -19,20 +19,20 @@ jobs:
 
       - name: Rebuild Project and Fix Gradle Configuration
         run: |
-          # 1. حفظ كود التحكم بالرسيفر الرئيسي
+          # 1. حفظ كود التحكم الرئيسي
           cp lib/main.dart main.dart.bak
 
-          # 2. تنظيف المستودع من الملفات والإعدادات القديمة لتفادي أي تعارض
+          # 2. تنظيف المستودع من الملفات القديمة
           rm -rf android ios pubspec.yaml pubspec.lock .dart_tool
 
-          # 3. إنشاء هيكل مشروع أندرويد متكامل ونظيف
-          flutter create --platforms=android --org com.receiver.app .
+          # 3. إنشاء الهيكل وتحديد اسم الحزمة بـ (receiver_app) لتفادي أخطاء الأسماء
+          flutter create --project-name receiver_app --platforms=android --org com.receiver.app .
 
-          # 4. إرجاع كود main.dart وإضافة مكتبة archive للتعامل مع Zlib
+          # 4. إرجاع كود main.dart وإضافة مكتبة archive لـ Zlib
           cp main.dart.bak lib/main.dart
           flutter pub add archive
 
-          # 5. ضبط minSdkVersion تلقائياً لكل صيغ build.gradle و build.gradle.kts
+          # 5. تعديل minSdkVersion إلى 21 لتوافق شبكات TCP
           find android -name "build.gradle*" -exec sed -i 's/minSdkVersion.*/minSdkVersion = 21/g' {} + || true
 
       - name: Build Debug APK
