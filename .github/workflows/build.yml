@@ -17,27 +17,35 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Rebuild Project and Prepare Dependencies
+      - name: Rebuild Project and Fix Dart Imports
         run: |
           # 1. حفظ كود التحكم الرئيسي
           cp lib/main.dart main.dart.bak
 
-          # 2. تنظيف المستودع من الملفات القديمة
-          rm -rf android ios pubspec.yaml pubspec.lock .dart_tool
+          # 2. تنظيف المستودع من الملفات والاختبارات القديمة
+          rm -rf android ios pubspec.yaml pubspec.lock .dart_tool test
 
-          # 3. إعادة إنشاء المشروع بأسماء حزم مسموحة
+          # 3. إعادة إنشاء هيكل المشروع
           flutter create --project-name receiver_app --platforms=android --org com.receiver.app .
 
-          # 4. إرجاع كود main.dart وإضافة المكتبات الأساسية
+          # 4. إزالة مجلد الاختبارات التلقائي لتجنب تعارض widget_test.dart
+          rm -rf test
+
+          # 5. استرجاع الكود والتأكد من إدراج مكتبة Uint8List في بداية الملف
           cp main.dart.bak lib/main.dart
+          if ! grep -q "import 'dart:typed_data';" lib/main.dart; then
+            sed -i '1i import '\''dart:typed_data'\'';' lib/main.dart
+          fi
+
+          # 6. إضافة مكتبة الضغط Zlib وتعديل minSdk إلى 21
           flutter pub add archive
-
-          # 5. تعديل minSdk للرقم 21 لدعم شبكات TCP
           find android -name "build.gradle*" -exec sed -i 's/.*minSdk.*/        minSdk = 21/g' {} + || true
-
-      - name: Check Dart Code Errors
-        run: flutter analyze || true
 
       - name: Build Debug APK
         run: flutter build apk --debug
-        
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          
