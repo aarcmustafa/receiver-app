@@ -8,7 +8,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ضبط إصدار بيئة جافا المتوافقة مع أندرويد و Gradle
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -20,10 +19,10 @@ jobs:
 
       - run: flutter create --platforms=android .
       - run: flutter pub get
-      - run: flutter build apk --release
+      - run: flutter build apk --debug
 
       - uses: actions/upload-artifact@v4
         with:
-          name: release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
           
