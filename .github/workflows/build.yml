@@ -17,26 +17,26 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Build Debug APK
+      - name: Setup Fresh Android Project
         run: |
-          # 1. إنشاء مشروع Flutter نقي في مجلد مؤقت
-          flutter create --platforms=android temp_app
+          # 1. حفظ كود التحكم الرئيسي
+          cp lib/main.dart main.dart.bak
           
-          # 2. إضافة مكتبة archive لدعم بروتوكول Zlib الخاصة بالرسيفر
-          cd temp_app
+          # 2. إزالة أي ملفات إعدادات قديمة مسببة للتعارض
+          rm -rf android pubspec.yaml
+          
+          # 3. إنشاء هيكل مشروع أندرويد ونظام حزم جديدين ونظيفين
+          flutter create --platforms=android --org com.receiver.app .
+          
+          # 4. إرجاع كود main.dart وإضافة مكتبة الضغط تلقائياً
+          cp main.dart.bak lib/main.dart
           flutter pub add archive
-          
-          # 3. نسخ كود التحكم الرئيسي إلى المشروع
-          cp ../lib/main.dart lib/main.dart
-          
-          # 4. رفع مستوى SDK ليتوافق مع شبكات TCP
-          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle || true
-          
-          # 5. بناء الملف النهائي
-          flutter build apk --debug
+
+      - name: Build Debug APK
+        run: flutter build apk --debug
 
       - uses: actions/upload-artifact@v4
         with:
           name: debug-apk
-          path: temp_app/build/app/outputs/flutter-apk/app-debug.apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
           
