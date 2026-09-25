@@ -17,27 +17,26 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Prepare Project and Fix Android SDK
-        run: |
-          # 1. حفظ كود main.dart الأساسي
-          cp lib/main.dart main.dart.bak
-          
-          # 2. إنشاء هيكل مشروع أندرويد حديث
-          flutter create --platforms=android --org com.receiver.app .
-          
-          # 3. إرجاع كود التحكم بالرسيفر
-          cp main.dart.bak lib/main.dart
-          
-          # 4. رفع الحد الأدنى للـ Android SDK إلى 21 لدعم الاتصالات
-          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle || true
-
       - name: Build Debug APK
         run: |
-          flutter pub get
+          # 1. إنشاء مشروع Flutter نقي في مجلد مؤقت
+          flutter create --platforms=android temp_app
+          
+          # 2. إضافة مكتبة archive لدعم بروتوكول Zlib الخاصة بالرسيفر
+          cd temp_app
+          flutter pub add archive
+          
+          # 3. نسخ كود التحكم الرئيسي إلى المشروع
+          cp ../lib/main.dart lib/main.dart
+          
+          # 4. رفع مستوى SDK ليتوافق مع شبكات TCP
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle || true
+          
+          # 5. بناء الملف النهائي
           flutter build apk --debug
 
       - uses: actions/upload-artifact@v4
         with:
           name: debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: temp_app/build/app/outputs/flutter-apk/app-debug.apk
           
