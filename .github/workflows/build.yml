@@ -17,29 +17,27 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Rebuild Project and Fix Gradle Configuration
+      - name: Rebuild Project and Prepare Dependencies
         run: |
           # 1. حفظ كود التحكم الرئيسي
           cp lib/main.dart main.dart.bak
 
-          # 2. تنظيف البيئة والتأكد من إزالة المجلدات القديمة
+          # 2. تنظيف المستودع من الملفات القديمة
           rm -rf android ios pubspec.yaml pubspec.lock .dart_tool
 
-          # 3. إعادة إنشاء هيكل أندرويد بأسماء حزم مسموحة
+          # 3. إعادة إنشاء المشروع بأسماء حزم مسموحة
           flutter create --project-name receiver_app --platforms=android --org com.receiver.app .
 
-          # 4. استرجاع الكود المباشر وإضافة مكتبة الضغط Zlib
+          # 4. إرجاع كود main.dart وإضافة المكتبات الأساسية
           cp main.dart.bak lib/main.dart
           flutter pub add archive
 
-          # 5. استبدال السطر بالكامل بتركيب Kotlin المعتمد (minSdk = 21)
+          # 5. تعديل minSdk للرقم 21 لدعم شبكات TCP
           find android -name "build.gradle*" -exec sed -i 's/.*minSdk.*/        minSdk = 21/g' {} + || true
+
+      - name: Check Dart Code Errors
+        run: flutter analyze || true
 
       - name: Build Debug APK
         run: flutter build apk --debug
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
-          
+        
