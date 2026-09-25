@@ -17,20 +17,23 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Setup Fresh Android Project
+      - name: Rebuild Project and Fix Gradle Configuration
         run: |
-          # 1. حفظ كود التحكم الرئيسي
+          # 1. حفظ كود التحكم بالرسيفر الرئيسي
           cp lib/main.dart main.dart.bak
-          
-          # 2. إزالة أي ملفات إعدادات قديمة مسببة للتعارض
-          rm -rf android pubspec.yaml
-          
-          # 3. إنشاء هيكل مشروع أندرويد ونظام حزم جديدين ونظيفين
+
+          # 2. تنظيف المستودع من الملفات والإعدادات القديمة لتفادي أي تعارض
+          rm -rf android ios pubspec.yaml pubspec.lock .dart_tool
+
+          # 3. إنشاء هيكل مشروع أندرويد متكامل ونظيف
           flutter create --platforms=android --org com.receiver.app .
-          
-          # 4. إرجاع كود main.dart وإضافة مكتبة الضغط تلقائياً
+
+          # 4. إرجاع كود main.dart وإضافة مكتبة archive للتعامل مع Zlib
           cp main.dart.bak lib/main.dart
           flutter pub add archive
+
+          # 5. ضبط minSdkVersion تلقائياً لكل صيغ build.gradle و build.gradle.kts
+          find android -name "build.gradle*" -exec sed -i 's/minSdkVersion.*/minSdkVersion = 21/g' {} + || true
 
       - name: Build Debug APK
         run: flutter build apk --debug
