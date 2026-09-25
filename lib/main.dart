@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -38,6 +39,7 @@ class _ReceiverHomeScreenState extends State<ReceiverHomeScreen> {
 
   Socket? _socket;
   bool _isConnected = false;
+  bool _isLoading = false; // تم تعريف المتغير بنجاح لتجنب خطأ البناء
   bool _isSignalMonitoring = false;
   bool _isScanning = false;
   double _scanProgress = 0.0;
@@ -165,14 +167,16 @@ class _ReceiverHomeScreenState extends State<ReceiverHomeScreen> {
     _disconnect();
     final int port = int.tryParse(_portController.text.trim()) ?? 20000;
 
-    try {
-      setState(() {
-        _statusMessage = 'جاري الاتصال بالرسيفر ${_ipController.text}:$port...';
-      });
+    setState(() {
+      _isLoading = true;
+      _statusMessage = 'جاري الاتصال بالرسيفر ${_ipController.text}:$port...';
+    });
 
+    try {
       _socket = await Socket.connect(_ipController.text, port, timeout: const Duration(seconds: 5));
       setState(() {
         _isConnected = true;
+        _isLoading = false;
         _statusMessage = 'تم الاتصال بنجاح بالرسيفر';
       });
 
@@ -196,6 +200,7 @@ class _ReceiverHomeScreenState extends State<ReceiverHomeScreen> {
       setState(() {
         _statusMessage = 'فشل الاتصال بالرسيفر: $e';
         _isConnected = false;
+        _isLoading = false;
       });
     }
   }
@@ -207,6 +212,7 @@ class _ReceiverHomeScreenState extends State<ReceiverHomeScreen> {
     _socket = null;
     setState(() {
       _isConnected = false;
+      _isLoading = false;
       _isSignalMonitoring = false;
       _statusMessage = 'تم قطع الاتصال';
     });
@@ -345,7 +351,9 @@ class _ReceiverHomeScreenState extends State<ReceiverHomeScreen> {
                               backgroundColor: _isConnected ? Colors.red : Colors.green,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                             ),
-                            child: Text(_isConnected ? 'قطع الاتصال' : 'اتصال', style: const TextStyle(fontSize: 16)),
+                            child: _isLoading 
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : Text(_isConnected ? 'قطع الاتصال' : 'اتصال', style: const TextStyle(fontSize: 16)),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -499,6 +507,20 @@ class _ReceiverHomeScreenState extends State<ReceiverHomeScreen> {
                 _statusMessage,
                 style: const TextStyle(color: Colors.white70, fontSize: 13),
                 textAlign: TextAlign.center,
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // توقيع المبرمج
+            const Center(
+              child: Text(
+                'Developer: Djellouli Mustafa',
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ],
