@@ -17,12 +17,17 @@ jobs:
         with:
           channel: 'stable'
 
-      - run: flutter create --platforms=android .
-      - run: flutter pub get
-      - run: flutter build apk --debug
+      # إنشاء مشروع نقي ونقل كود main.dart إليه ثم البناء
+      - run: |
+          mkdir temp_build
+          cd temp_build
+          flutter create --platforms=android receiver_app
+          cp ../lib/main.dart receiver_app/lib/main.dart
+          cd receiver_app
+          flutter build apk --debug
 
       - uses: actions/upload-artifact@v4
         with:
           name: debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: temp_build/receiver_app/build/app/outputs/flutter-apk/app-debug.apk
           
