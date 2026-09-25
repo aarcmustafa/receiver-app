@@ -17,17 +17,27 @@ jobs:
         with:
           channel: 'stable'
 
-      # إنشاء مشروع نقي ونقل كود main.dart إليه ثم البناء
-      - run: |
-          mkdir temp_build
-          cd temp_build
-          flutter create --platforms=android receiver_app
-          cp ../lib/main.dart receiver_app/lib/main.dart
-          cd receiver_app
+      - name: Prepare Project and Fix Android SDK
+        run: |
+          # 1. حفظ كود main.dart الأساسي
+          cp lib/main.dart main.dart.bak
+          
+          # 2. إنشاء هيكل مشروع أندرويد حديث
+          flutter create --platforms=android --org com.receiver.app .
+          
+          # 3. إرجاع كود التحكم بالرسيفر
+          cp main.dart.bak lib/main.dart
+          
+          # 4. رفع الحد الأدنى للـ Android SDK إلى 21 لدعم الاتصالات
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle || true
+
+      - name: Build Debug APK
+        run: |
+          flutter pub get
           flutter build apk --debug
 
       - uses: actions/upload-artifact@v4
         with:
           name: debug-apk
-          path: temp_build/receiver_app/build/app/outputs/flutter-apk/app-debug.apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
           
